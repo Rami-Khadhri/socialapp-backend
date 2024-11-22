@@ -8,6 +8,7 @@ import projetvue.springboot_backend.Repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -90,6 +91,42 @@ public class UserService {
         userRepository.save(user);
         return true; // Password reset successful
     }
+    public User findOrCreateUserByEmail(String email, String username) {
+        return userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    User newUser = new User();
+                    newUser.setEmail(email);
+                    newUser.setUsername(username != null
+                            ? username.replaceAll("\\s+", "_").toLowerCase()
+                            : email.split("@")[0]);
+                    newUser.setVerified(true);
+                    newUser.setEnabled(true);
+                    newUser.setRole("ROLE_USER");
+                    newUser.setAuthorities(Collections.singletonList("ROLE_USER"));
+                    newUser.setPhoto(null);
+                    return userRepository.save(newUser);
+                });
+    }
+
+
+    /**
+     * Update the user's photo.
+     * @param email The email of the user.
+     * @param photoBytes The new photo (as byte[]).
+     * @return The updated user.
+     */
+    public User updateUserPhoto(String email, byte[] photoBytes) {
+        // Find the user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found by email: " + email));
+
+        // Update the user's photo
+        user.setPhoto(photoBytes);
+
+        // Save the updated user back to the repository
+        return userRepository.save(user);
+    }
+
     // Delete a user by ID
     public void deleteUser(String id) {
         userRepository.deleteById(id);

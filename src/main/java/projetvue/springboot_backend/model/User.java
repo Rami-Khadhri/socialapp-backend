@@ -57,6 +57,28 @@ public class User implements UserDetails {
     private String verificationToken;
     private List<String> authorities = new ArrayList<>();
 
+    // Getters and Setters
+    @Getter
+    private byte[] photo = null; //
+    // Binary data for the photo
+    @Getter
+    private String photoUrl; // Add this field
+
+    public byte[] getPhoto() {
+        return photo;
+    }
+
+    public String getPhotoUrl() {
+        return photoUrl;
+    }
+
+    public void setPhoto(byte[] photo) {
+        this.photo = photo;
+    }
+
+    public void setPhotoUrl(String photoUrl) {
+        this.photoUrl = photoUrl;
+    }
     // Existing constructors and basic getters/setters remain the same...
 
     @Override

@@ -16,4 +16,6 @@ public class AuthResponse {
     private String role;
     private boolean verified;   // Added verified field
     private boolean enabled;    // Added enabled field
+    private String photoUrl;
+    private byte[] photo;
 }

@@ -61,6 +61,7 @@ public class AuthController {
         user.setRole("ROLE_USER");
         user.setVerificationToken(verificationToken);
         user.setAuthorities(Collections.singletonList("ROLE_USER"));
+        user.setPhoto("null".getBytes());
 
         userRepository.save(user);
 
@@ -100,6 +101,7 @@ public class AuthController {
                     .username(user.getUsername())
                     .email(user.getEmail())
                     .role(user.getRole())
+                    .photo(user.getPhoto())
                     .build();
 
             return ResponseEntity.ok(response);
@@ -147,7 +149,9 @@ public class AuthController {
                     .email(user.getEmail())
                     .role(user.getRole())
                     .verified(user.isVerified())  // Include the verified status
-                    .enabled(user.isEnabled())   // Include the enabled status
+                    .enabled(user.isEnabled())// Include the enabled status
+                    .photo(user.getPhoto()) // Include the photo URL in the response
+                    .photoUrl(user.getPhotoUrl())
                     .build();
 
             return ResponseEntity.ok(response);
@@ -204,7 +208,7 @@ public class AuthController {
             String email = passwordResetRequest.getEmail();
 
             // Ensure the email is provided
-            if (email == null || email.isEmpty()) {
+            if (email == null || email.isEmpty() ) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ErrorResponse("Email is required"));
             }
