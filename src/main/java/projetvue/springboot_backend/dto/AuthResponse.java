@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.bson.types.Binary;
 
 @Data
 @Builder
@@ -15,7 +16,9 @@ public class AuthResponse {
     private String email;
     private String role;
     private boolean verified;   // Added verified field
-    private boolean enabled;    // Added enabled field
+    private boolean enabled;
+    private Binary photo; // Base64 photo string
     private String photoUrl;
-    private byte[] photo;
+    private boolean isGoogleUser;
+
 }

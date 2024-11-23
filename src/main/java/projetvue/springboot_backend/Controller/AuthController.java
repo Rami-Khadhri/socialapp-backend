@@ -3,6 +3,7 @@ package projetvue.springboot_backend.Controller;
 import io.jsonwebtoken.JwtException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.bson.types.Binary;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -59,9 +60,10 @@ public class AuthController {
         user.setVerified(false);
         user.setEnabled(true);
         user.setRole("ROLE_USER");
+        user.setPhoto(null);
         user.setVerificationToken(verificationToken);
         user.setAuthorities(Collections.singletonList("ROLE_USER"));
-        user.setPhoto("null".getBytes());
+
 
         userRepository.save(user);
 
@@ -95,7 +97,7 @@ public class AuthController {
             // Generate JWT token
             String token = jwtService.generateToken(user);
 
-            // Build the response
+            // Build the response with both photo types
             AuthResponse response = AuthResponse.builder()
                     .token(token)
                     .username(user.getUsername())
@@ -148,9 +150,10 @@ public class AuthController {
                     .username(user.getUsername())
                     .email(user.getEmail())
                     .role(user.getRole())
-                    .verified(user.isVerified())  // Include the verified status
-                    .enabled(user.isEnabled())// Include the enabled status
-                    .photo(user.getPhoto()) // Include the photo URL in the response
+                    .verified(user.isVerified())
+                    .enabled(user.isEnabled())
+                    .photo(user.getPhoto())
+                    .isGoogleUser(user.isGoogleUser())
                     .photoUrl(user.getPhotoUrl())
                     .build();
 

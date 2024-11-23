@@ -1,12 +1,16 @@
 package projetvue.springboot_backend.Controller;
 
+import org.bson.types.Binary;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import projetvue.springboot_backend.Repository.UserRepository;
@@ -14,9 +18,7 @@ import projetvue.springboot_backend.Service.UserService;
 import projetvue.springboot_backend.model.User;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/users")
@@ -59,44 +61,46 @@ public class UserController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
-    @GetMapping("/{id}/photo")
-    public ResponseEntity<byte[]> getPhoto(@PathVariable String id) {
-        Optional<User> optionalUser = userRepository.findById(id);
-        if (optionalUser.isPresent()) {
-            byte[] photo = optionalUser.get().getPhoto();
-            if (photo != null) {
-                return ResponseEntity.ok()
-                        .header("Content-Type", "image/jpeg") // Adjust MIME type as needed
-                        .body(photo);
-            } else {
-                return ResponseEntity.status(404).body(null);
-            }
-        } else {
-            return ResponseEntity.status(404).body(null);
-        }
-    }
     @PostMapping("/upload-photo")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<?> uploadPhoto(@RequestParam("file") MultipartFile file) {
         try {
-            // Get the current logged-in user's email
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            String email = ((UserDetails) authentication.getPrincipal()).getUsername(); // Get email from authentication
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String username = auth.getName();
 
-            // Check if the file is not empty
-            if (file.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "No file uploaded"));
-            }
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Call the service to update the photo
-            userService.updateUserPhoto(email, file.getBytes());
+            user.setPhoto(new Binary(file.getBytes()));
+            userRepository.save(user);
 
-            return ResponseEntity.ok(Map.of("message", "Photo uploaded successfully"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "An error occurred while uploading the photo"));
+            return ResponseEntity.ok(Map.of("message", "Photo uploaded successfully", "photo", Base64.getEncoder().encodeToString(file.getBytes())));
+
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to upload photo.");
         }
     }
+    @GetMapping("/users/{username}/photo")
+    public ResponseEntity<?> getPhoto(@PathVariable("username") String username) {
+        try {
+            // Find the user by username
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
+            // Check if the user has a photo
+            if (user.getPhoto() == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Photo not found for user.");
+            }
+
+            // Convert the Binary data to Base64 string
+            String base64Photo = Base64.getEncoder().encodeToString(user.getPhoto().getData());
+
+            // Return the photo as Base64 encoded string
+            return ResponseEntity.ok(Map.of("photo", base64Photo));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to retrieve photo.");
+        }
+    }
 
     @DeleteMapping("/delete/{id}")
     @PreAuthorize("hasRole('ADMIN')")

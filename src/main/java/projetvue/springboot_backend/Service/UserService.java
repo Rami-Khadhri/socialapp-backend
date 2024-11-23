@@ -1,13 +1,16 @@
 package projetvue.springboot_backend.Service;
 
+import org.bson.types.Binary;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import projetvue.springboot_backend.model.User;
 import projetvue.springboot_backend.Repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -53,7 +56,9 @@ public class UserService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found by email"));
     }
-
+    public Optional<User> findUserById(String id) {
+        return userRepository.findById(id);
+    }
     // Check if the password is correct
     public boolean checkPassword(User user, String oldPassword) {
         return passwordEncoder.matches(oldPassword, user.getPassword());  // Use PasswordEncoder for checking password
@@ -101,31 +106,14 @@ public class UserService {
                             : email.split("@")[0]);
                     newUser.setVerified(true);
                     newUser.setEnabled(true);
+                    newUser.setGoogleUser(true);
                     newUser.setRole("ROLE_USER");
                     newUser.setAuthorities(Collections.singletonList("ROLE_USER"));
-                    newUser.setPhoto(null);
                     return userRepository.save(newUser);
                 });
     }
 
 
-    /**
-     * Update the user's photo.
-     * @param email The email of the user.
-     * @param photoBytes The new photo (as byte[]).
-     * @return The updated user.
-     */
-    public User updateUserPhoto(String email, byte[] photoBytes) {
-        // Find the user by email
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found by email: " + email));
-
-        // Update the user's photo
-        user.setPhoto(photoBytes);
-
-        // Save the updated user back to the repository
-        return userRepository.save(user);
-    }
 
     // Delete a user by ID
     public void deleteUser(String id) {

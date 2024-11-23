@@ -37,6 +37,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             newUser.setRole("ROLE_USER");
             newUser.setVerified(true);
             newUser.setEnabled(true);
+            newUser.setGoogleUser(true);
             newUser.setPhotoUrl(token.getPrincipal().getAttribute("picture"));
             userRepository.save(newUser);  // Save new user
             user = Optional.of(newUser);  // Re-fetch the user after saving

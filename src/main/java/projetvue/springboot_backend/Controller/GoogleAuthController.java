@@ -26,7 +26,7 @@ public class GoogleAuthController {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final UserService userService;
-    private static final String CLIENT_ID = "715234715602-o90t6moc905m83pteand460cqctmi9i9.apps.googleusercontent.com";
+    private static final String CLIENT_ID = "32864941396-ompl4sjmaotscebv5jreaol07ts15jtl.apps.googleusercontent.com";
     private static final String GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo";
     @PostMapping("/google")
     public ResponseEntity<?> googleAuth(@RequestBody Map<String, String> body) {
@@ -50,7 +50,8 @@ public class GoogleAuthController {
             GoogleIdToken.Payload payload = googleIdToken.getPayload();
             String email = payload.getEmail();
             String name = (String) payload.get("name");
-            String photoUrl = (String) payload.get("picture"); // Extract the profile picture URL
+            String photoUrl = (String) payload.get("picture"); // Extract the profile picture UR
+
 
             // Find or create the user
             User user = userService.findOrCreateUserByEmail(email, name);
@@ -63,7 +64,6 @@ public class GoogleAuthController {
 
             // Generate JWT token
             String token = jwtService.generateToken(user);
-
             // Return the token and user details
             AuthResponse response = AuthResponse.builder()
                     .token(token)

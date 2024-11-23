@@ -2,7 +2,9 @@ package projetvue.springboot_backend.model;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.bson.types.Binary;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -14,65 +16,55 @@ import java.util.ArrayList;
 
 @Document(collection = "users")
 public class User implements UserDetails {
-    public String getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public boolean isVerified() {
-        return verified;
-    }
-
-    public void setVerified(boolean verified) {
-        this.verified = verified;
-    }
-
-    public String getVerificationToken() {
-        return verificationToken;
-    }
-
-    public void setVerificationToken(String verificationToken) {
-        this.verificationToken = verificationToken;
-    }
 
     @Getter
     @Id
     private String id;
     private String username;
+
     @Getter
     private String email;
     private String password;
     @Getter
     private String role;
     private boolean enabled;
-
+    @Setter
+    @Getter
     private boolean verified = false;
+    @Getter
+    @Setter
     private String verificationToken;
+@Getter
+@Setter
+    private Binary photo;
+    @Setter
+    @Getter
+    private boolean isGoogleUser;
+
+
+
     private List<String> authorities = new ArrayList<>();
 
-    // Getters and Setters
-    @Getter
-    private byte[] photo = null; //
-    // Binary data for the photo
-    @Getter
     private String photoUrl; // Add this field
-
-    public byte[] getPhoto() {
-        return photo;
+    public User(String username, String email, String password, String role, boolean enabled, boolean verified, String verificationToken, List<String> authorities, Binary photo, String photoUrl) {
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.enabled = enabled;
+        this.verified = verified;
+        this.verificationToken = verificationToken;
+        this.authorities = authorities;
+        this.photo = photo;
+        this.photoUrl = photoUrl;
     }
 
-    public String getPhotoUrl() {
-        return photoUrl;
+    public User() {
     }
 
-    public void setPhoto(byte[] photo) {
+    // Getters and Setters
+
+    public void setPhoto(Binary photo) {
         this.photo = photo;
     }
 
@@ -93,6 +85,14 @@ public class User implements UserDetails {
                     .forEach(authoritiesList::add);
         }
         return authoritiesList;
+    }
+
+    public Binary getPhoto() {
+        return photo;
+    }
+
+    public String getPhotoUrl() {
+        return photoUrl;
     }
 
     @Override

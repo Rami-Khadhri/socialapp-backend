@@ -17,7 +17,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-            helper.setFrom("noreply@trendy.com");
+            helper.setFrom("noreply.trendy@gmail.com");
             helper.setTo(to);
             helper.setSubject("Verify Your Account");
 

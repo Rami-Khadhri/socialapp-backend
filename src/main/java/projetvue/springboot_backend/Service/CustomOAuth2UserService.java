@@ -38,6 +38,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
                     newUser.setRole("ROLE_USER");
                     newUser.setVerified(true);
                     newUser.setEnabled(true);
+                    newUser.setGoogleUser(true);
                     newUser.setPhotoUrl(picture);
                     return userRepository.save(newUser);
                 });
