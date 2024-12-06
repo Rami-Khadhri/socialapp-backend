@@ -145,7 +145,38 @@ public class UserController {
                     .body("Failed to retrieve photo: " + e.getMessage());
         }
     }
+    @GetMapping("/photo/{username}")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    public ResponseEntity<?> getUserPhotoByUsername(@PathVariable String username) {
+        try {
+            Optional<User> userOptional = userRepository.findByUsername(username);
 
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+
+            User user = userOptional.get();
+
+            // Check if user has a photo
+            if (user.getPhoto() == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No photo found for user");
+            }
+
+            // For binary photos, convert to Base64
+            if (user.getPhoto() instanceof Binary) {
+                Binary photoBinary = user.getPhoto();
+                String base64Photo = Base64.getEncoder().encodeToString(photoBinary.getData());
+                return ResponseEntity.ok(Map.of("photo", base64Photo));
+            }
+
+            // If photo is already a string (e.g., URL), return as is
+            return ResponseEntity.ok(Map.of("photo", user.getPhoto().toString()));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to retrieve photo: " + e.getMessage());
+        }
+    }
     @DeleteMapping("/delete/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable String id) {

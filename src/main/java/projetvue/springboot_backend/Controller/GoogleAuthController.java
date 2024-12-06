@@ -17,6 +17,8 @@ import projetvue.springboot_backend.model.User;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -26,8 +28,10 @@ public class GoogleAuthController {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final UserService userService;
-    private static final String CLIENT_ID = "32864941396-ompl4sjmaotscebv5jreaol07ts15jtl.apps.googleusercontent.com";
-    private static final String GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo";
+    private static final String CLIENT_ID ="32864941396-ompl4sjmaotscebv5jreaol07ts15jtl.apps.googleusercontent.com";
+    private static final String GOOGLE_TOKEN_INFO_URL ="https://oauth2.googleapis.com/tokeninfo";
+
+
     @PostMapping("/google")
     public ResponseEntity<?> googleAuth(@RequestBody Map<String, String> body) {
         try {
@@ -50,11 +54,15 @@ public class GoogleAuthController {
             GoogleIdToken.Payload payload = googleIdToken.getPayload();
             String email = payload.getEmail();
             String name = (String) payload.get("name");
-            String photoUrl = (String) payload.get("picture"); // Extract the profile picture UR
+            String photoUrl = (String) payload.get("picture"); // Extract the profile picture URL
 
+            // Append a random 3-digit number to the name
+            Random random = new Random();
+            int randomValue = 100 + random.nextInt(900); // Generates a value between 100 and 999
+            String newName = name + randomValue;
 
             // Find or create the user
-            User user = userService.findOrCreateUserByEmail(email, name);
+            User user = userService.findOrCreateUserByEmail(email, newName);
 
             // Update the user's profile photo if it exists
             if (photoUrl != null && !photoUrl.isEmpty()) {
@@ -64,6 +72,7 @@ public class GoogleAuthController {
 
             // Generate JWT token
             String token = jwtService.generateToken(user);
+
             // Return the token and user details
             AuthResponse response = AuthResponse.builder()
                     .token(token)
@@ -78,6 +87,7 @@ public class GoogleAuthController {
             return ResponseEntity.status(500).body(Map.of("error", "An error occurred: " + e.getMessage()));
         }
     }
+
 
 
     private Map<String, String> verifyGoogleToken(String idToken) {
