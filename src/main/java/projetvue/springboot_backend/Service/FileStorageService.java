@@ -32,4 +32,12 @@ public class FileStorageService {
             throw new RuntimeException("Could not store file", ex);
         }
     }
+    public boolean deleteFile(String fileName) {
+        try {
+            Path filePath = Paths.get(uploadDir).toAbsolutePath().normalize().resolve(fileName);
+            return Files.deleteIfExists(filePath); // Returns true if the file was deleted, false if it didn't exist
+        } catch (IOException ex) {
+            throw new RuntimeException("Could not delete file: " + fileName, ex);
+        }
+    }
 }

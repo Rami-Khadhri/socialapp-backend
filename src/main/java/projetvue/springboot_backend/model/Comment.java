@@ -22,15 +22,14 @@ public class Comment {
     @Setter
     private LocalDateTime createdAt;
 
+
     @DBRef
     @Getter
     @Setter
     private User user;
 
-    @DBRef
     @Getter
     @Setter
-    private Post post;
-
-
+    private String postId; // Store post ID directly instead of @DBRef
 }
+

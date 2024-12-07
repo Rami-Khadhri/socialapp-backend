@@ -61,31 +61,32 @@ public class PostController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(postService.createPost(user, content, imageFile));
     }
-
     @GetMapping("/all")
     public ResponseEntity<List<Post>> getAllPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        // Ensure only authenticated users can fetch posts
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // Debugging: log the page and size values
-        System.out.println("Page: " + page + ", Size: " + size);
-
         try {
             Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
             List<Post> posts = postRepository.findAll(pageable).getContent();
+
+            // Return posts without heavy or unnecessary fields
+            posts.forEach(post -> {
+                post.setLikedBy(null); // Exclude `likedBy` if not needed
+            });
+
             return ResponseEntity.ok(posts);
         } catch (Exception e) {
-            // Log the error and return a 500 status with a message
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
 
     @PostMapping("/{postId}/like")
     public ResponseEntity<Map<String, Object>> likePost(@PathVariable String postId) {
@@ -156,9 +157,8 @@ public class PostController {
 
         Post post = postOptional.get();
 
-        // Fetch comments manually since @DBRef doesn't automatically populate
-        List<Comment> comments = commentRepository.findAllById(post.getComments().stream()
-                .map(Comment::getId).toList());
+        // Fetch comments efficiently based on postId
+        List<Comment> comments = commentRepository.findByPostId(postId);
 
         // Construct a response with full post and comments
         Map<String, Object> response = new HashMap<>();
@@ -170,18 +170,31 @@ public class PostController {
 
     @GetMapping("/{postId}/comments")
     public ResponseEntity<List<Comment>> getCommentsForPost(@PathVariable String postId) {
-        Optional<Post> postOptional = postRepository.findById(postId);
-        if (postOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        // Fetch comments manually
-        List<Comment> comments = commentRepository.findAllById(
-                postOptional.get().getComments().stream().map(Comment::getId).toList()
-        );
-
+        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
         return ResponseEntity.ok(comments);
     }
+    @PutMapping("/edit/{postId}")
+    public ResponseEntity<Post> editPost(
+            @PathVariable String postId,
+            @RequestParam("content") String content,
+            @RequestParam(value = "image", required = false) MultipartFile imageFile
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Optional<User> userOptional = userRepository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            Post editedPost = postService.editPost(postId, userOptional.get(), content, imageFile);
+            return ResponseEntity.ok(editedPost);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+    }
+
 
 
     @DeleteMapping("/delete/{postId}")

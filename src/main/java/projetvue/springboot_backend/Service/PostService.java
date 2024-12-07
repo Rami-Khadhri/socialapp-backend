@@ -3,7 +3,6 @@ package projetvue.springboot_backend.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import projetvue.springboot_backend.model.Comment;
 import projetvue.springboot_backend.model.Post;
 import projetvue.springboot_backend.model.User;
@@ -36,8 +35,12 @@ public class PostService {
         post.setShareCount(0);
 
         if (imageFile != null && !imageFile.isEmpty()) {
-            String imageUrl = fileStorageService.storeFile(imageFile);
-            post.setImageUrl(imageUrl);
+            try {
+                String imageUrl = fileStorageService.storeFile(imageFile);
+                post.setImageUrl(imageUrl);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to store file", e); // Consider using a custom exception
+            }
         }
 
         return postRepository.save(post);
@@ -52,48 +55,73 @@ public class PostService {
             post.setLikeCount(post.getLikedBy().size());
         } else {
             post.getLikedBy().add(user);
-            post.setLikeCount(post.getLikeCount() + 1);
+            post.setLikeCount(post.getLikedBy().size());
         }
 
         return postRepository.save(post);
     }
-
     public Comment addComment(String postId, User user, String content) {
-        Optional<Post> postOptional = postRepository.findById(postId);
-        if (postOptional.isEmpty()) {
-            throw new RuntimeException("Post not found");
-        }
+        // Ensure the post exists
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
 
-        Post post = postOptional.get();
         Comment comment = new Comment();
         comment.setContent(content);
         comment.setUser(user);
-        comment.setPost(post);
+        comment.setPostId(postId); // Link to post by ID
         comment.setCreatedAt(LocalDateTime.now());
 
-        // Save the comment first
         Comment savedComment = commentRepository.save(comment);
 
-        // Add the saved comment to the post's comments list
-        post.getComments().add(savedComment);
+        // Increment the post's comment count
         post.setCommentCount(post.getCommentCount() + 1);
         postRepository.save(post);
 
         return savedComment;
     }
+    public Post editPost(String postId, User user, String newContent, MultipartFile newImageFile) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
+
+        // Verify the user is the post owner
+        if (!post.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Unauthorized to edit this post");
+        }
+
+        // Update content
+        post.setContent(newContent);
+        post.setUpdatedAt(LocalDateTime.now());
+
+        // Handle image update if provided
+        if (newImageFile != null && !newImageFile.isEmpty()) {
+            try {
+                // Delete old image if exists
+                if (post.getImageUrl() != null) {
+                    fileStorageService.deleteFile(post.getImageUrl());
+                }
+
+                // Store new image
+                String newImageUrl = fileStorageService.storeFile(newImageFile);
+                post.setImageUrl(newImageUrl);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to update post image", e);
+            }
+        }
+
+        return postRepository.save(post);
+    }
 
     public boolean deletePost(String postId, User user) {
-        Optional<Post> postOptional = postRepository.findById(postId);
-        if (postOptional.isEmpty()) {
-            return false;
-        }
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
 
-        Post post = postOptional.get();
-        // Only allow deletion by post owner or admin
+        // Only allow deletion by the post owner
         if (!post.getUser().getId().equals(user.getId())) {
-            return false;
+            return false; // Alternatively, throw an UnauthorizedException
         }
 
+        // Delete post and its associated comments
+        commentRepository.deleteAllByPostId(postId);
         postRepository.delete(post);
         return true;
     }
