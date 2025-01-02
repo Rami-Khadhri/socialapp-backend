@@ -14,10 +14,7 @@ import projetvue.springboot_backend.Service.UserService;
 import projetvue.springboot_backend.dto.AuthResponse;
 import projetvue.springboot_backend.model.User;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -30,6 +27,7 @@ public class GoogleAuthController {
     private final UserService userService;
     private static final String CLIENT_ID ="32864941396-ompl4sjmaotscebv5jreaol07ts15jtl.apps.googleusercontent.com";
     private static final String GOOGLE_TOKEN_INFO_URL ="https://oauth2.googleapis.com/tokeninfo";
+
 
 
     @PostMapping("/google")
@@ -53,39 +51,68 @@ public class GoogleAuthController {
 
             GoogleIdToken.Payload payload = googleIdToken.getPayload();
             String email = payload.getEmail();
-            String name = (String) payload.get("name");
-            String photoUrl = (String) payload.get("picture"); // Extract the profile picture URL
 
-            // Append a random 3-digit number to the name
-            Random random = new Random();
-            int randomValue = 100 + random.nextInt(900); // Generates a value between 100 and 999
-            String newName = name + randomValue;
+            // Check if user exists
+            Optional<User> existingUser = userRepository.findByEmail(email);
 
-            // Find or create the user
-            User user = userService.findOrCreateUserByEmail(email, newName);
+            if (existingUser.isPresent()) {
+                User user = existingUser.get();
+                // If user exists but is not a Google user, return error
+                if (!user.isGoogleUser()) {
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "An account with this email already exists. Please use regular login."));
+                }
 
-            // Update the user's profile photo if it exists
-            if (photoUrl != null && !photoUrl.isEmpty()) {
-                user.setPhotoUrl(photoUrl);
-                userRepository.save(user); // Save the updated user
+                // Update existing Google user's information
+                String photoUrl = (String) payload.get("picture");
+                if (photoUrl != null && !photoUrl.isEmpty()) {
+                    user.setPhotoUrl(photoUrl);
+                    userRepository.save(user);
+                }
+
+                // Generate JWT token for existing user
+                String token = jwtService.generateToken(user);
+                return ResponseEntity.ok(createAuthResponse(user, token));
             }
 
-            // Generate JWT token
-            String token = jwtService.generateToken(user);
+            // Create new user if doesn't exist
+            String name = (String) payload.get("name");
+            String photoUrl = (String) payload.get("picture");
 
-            // Return the token and user details
-            AuthResponse response = AuthResponse.builder()
-                    .token(token)
-                    .username(user.getUsername())
-                    .email(user.getEmail())
-                    .role(user.getRole())
-                    .photoUrl(user.getPhotoUrl()) // Include the photo URL in the response
-                    .build();
+            // Append random number to username
+            Random random = new Random();
+            int randomValue = 100 + random.nextInt(900);
+            String newUsername = name + randomValue;
 
-            return ResponseEntity.ok(response);
+            // Create new Google user
+            User newUser = new User();
+            newUser.setEmail(email);
+            newUser.setUsername(newUsername);
+            newUser.setPhotoUrl(photoUrl);
+            newUser.setGoogleUser(true);  // Set as Google user
+            newUser.setVerified(true);    // Google users are automatically verified
+            newUser.setRole("USER");      // Set default role
+
+            userRepository.save(newUser);
+
+            // Generate JWT token for new user
+            String token = jwtService.generateToken(newUser);
+            return ResponseEntity.ok(createAuthResponse(newUser, token));
+
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "An error occurred: " + e.getMessage()));
+            return ResponseEntity.status(500)
+                    .body(Map.of("error", "An error occurred: " + e.getMessage()));
         }
+    }
+
+    private AuthResponse createAuthResponse(User user, String token) {
+        return AuthResponse.builder()
+                .token(token)
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .photoUrl(user.getPhotoUrl())
+                .build();
     }
 
 

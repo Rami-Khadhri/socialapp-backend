@@ -31,9 +31,15 @@ public class UserController {
     }
 
     @GetMapping("/all")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+    @GetMapping("/active")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    public ResponseEntity<List<User>> getActiveUsers() {
+        List<User> activeUsers = userRepository.findAll(); // Assuming 'isOnline' is a boolean indicating active users
+        return ResponseEntity.ok(activeUsers);
     }
 
     @GetMapping("/{id}")
@@ -122,6 +128,13 @@ public class UserController {
         if (!isValidType) {
             throw new IllegalArgumentException("Only JPEG, PNG, and GIF files are allowed");
         }
+    }
+    // Method to search users by username
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    public ResponseEntity<List<User>> searchUsers(@RequestParam("q") String query) {
+        List<User> users = userRepository.findByUsernameContainingIgnoreCase(query);
+        return ResponseEntity.ok(users);
     }
 
     @GetMapping("/photo")

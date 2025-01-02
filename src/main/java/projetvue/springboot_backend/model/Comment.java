@@ -22,6 +22,10 @@ public class Comment {
     @Setter
     private LocalDateTime createdAt;
 
+    @Getter
+    @Setter
+    private LocalDateTime editedAt;
+
 
     @DBRef
     @Getter

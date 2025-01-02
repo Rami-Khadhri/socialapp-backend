@@ -33,6 +33,25 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
     private final UserService userService;
+    private static final Binary DEFAULT_PHOTO;
+
+    // Initialize the default photo static block
+    static {
+        try {
+            // Use Spring's ClassLoader to load the file from resources/static
+            String resourcePath = "static/user.png";
+            byte[] imageBytes = Objects.requireNonNull(AuthController.class
+                            .getClassLoader()
+                            .getResourceAsStream(resourcePath))
+                    .readAllBytes();
+
+            // Convert the byte array to Binary
+            DEFAULT_PHOTO = new Binary(imageBytes);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize default photo", e);
+        }
+    }
+
 
 
 
@@ -60,7 +79,7 @@ public class AuthController {
         user.setVerified(false);
         user.setEnabled(true);
         user.setRole("ROLE_USER");
-        user.setPhoto(null);
+        user.setPhoto(DEFAULT_PHOTO);  // Set default photo
         user.setVerificationToken(verificationToken);
         user.setAuthorities(Collections.singletonList("ROLE_USER"));
 
@@ -254,13 +273,8 @@ public class AuthController {
                     .body(new ErrorResponse("An unexpected error occurred"));
         }
     }
-
-
-
-
     @PostMapping("/logout")
     public ResponseEntity<?> logout() {
-        // Inform the client to remove the JWT token
         return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
     }
 }
