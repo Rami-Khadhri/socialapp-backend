@@ -8,11 +8,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import projetvue.springboot_backend.Repository.CommentRepository;
 import projetvue.springboot_backend.dto.CommentDTO;
+import projetvue.springboot_backend.dto.PostDTO;
 import projetvue.springboot_backend.model.Comment;
 import projetvue.springboot_backend.model.Post;
 import projetvue.springboot_backend.model.User;
@@ -64,29 +66,17 @@ public class PostController {
     @GetMapping("/all")
     public ResponseEntity<List<Post>> getAllPosts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        List<Post> posts = postRepository.findAll(pageable).getContent();
 
-        try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-            List<Post> posts = postRepository.findAll(pageable).getContent();
+        posts.forEach(post -> {
+            post.setComments(null); // Exclude comments for better performance
+            post.setLikedBy(null);
+        });
 
-            // Return posts without heavy or unnecessary fields
-            posts.forEach(post -> {
-                post.setLikedBy(null); // Exclude `likedBy` if not needed
-            });
-
-            return ResponseEntity.ok(posts);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ResponseEntity.ok(posts);
     }
-
 
     @PostMapping("/{postId}/like")
     public ResponseEntity<Map<String, Object>> likePost(@PathVariable String postId) {
@@ -149,30 +139,39 @@ public class PostController {
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<Map<String, Object>> getPostWithComments(@PathVariable String postId) {
+    public ResponseEntity<PostDTO> getPostWithComments(@PathVariable String postId) {
         Optional<Post> postOptional = postRepository.findById(postId);
         if (postOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
         Post post = postOptional.get();
+        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
 
-        // Fetch comments efficiently based on postId
-        List<Comment> comments = commentRepository.findByPostId(postId);
+        PostDTO postDTO = new PostDTO();
+        postDTO.setId(post.getId());
+        postDTO.setContent(post.getContent());
+        postDTO.setImageUrl(post.getImageUrl());
+        postDTO.setLikeCount(post.getLikeCount());
+        postDTO.setCommentCount(post.getCommentCount());
+        postDTO.setShareCount(post.getShareCount());
+        postDTO.setCreatedAt(post.getCreatedAt());
+        postDTO.setComments(comments);
 
-        // Construct a response with full post and comments
-        Map<String, Object> response = new HashMap<>();
-        response.put("post", post);
-        response.put("comments", comments);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(postDTO);
     }
+
 
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<List<Comment>> getCommentsForPost(@PathVariable String postId) {
-        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
+    public ResponseEntity<List<Comment>> getCommentsForPost(
+            @PathVariable String postId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        List<Comment> comments = commentRepository.findByPostId(postId);
         return ResponseEntity.ok(comments);
     }
+
     @PutMapping("/edit/{postId}")
     public ResponseEntity<Post> editPost(
             @PathVariable String postId,
@@ -195,6 +194,64 @@ public class PostController {
         }
     }
 
+    @DeleteMapping("/comments/delete/{commentId}")
+    public ResponseEntity<Void> deleteComment(@PathVariable String commentId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Optional<User> userOptional = userRepository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Optional<Comment> commentOptional = commentRepository.findById(commentId);
+        if (commentOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        Comment comment = commentOptional.get();
+        if (!comment.getUser().getUsername().equals(username)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        // Update post's comment count
+        Post post = postRepository.findPostById(comment.getPostId());
+        post.setCommentCount(post.getCommentCount() - 1);
+        postRepository.save(post);
+
+        commentRepository.delete(comment);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/comments/edit/{commentId}")
+    public ResponseEntity<Comment> editComment(
+            @PathVariable String commentId,
+            @RequestBody CommentDTO commentDTO
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Optional<User> userOptional = userRepository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Optional<Comment> commentOptional = commentRepository.findById(commentId);
+        if (commentOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        Comment comment = commentOptional.get();
+        if (!comment.getUser().getUsername().equals(username)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        comment.setContent(commentDTO.getContent());
+        comment.setEditedAt(LocalDateTime.now());
+        commentRepository.save(comment);
+
+        return ResponseEntity.ok(comment);
+    }
 
 
     @DeleteMapping("/delete/{postId}")
@@ -210,4 +267,32 @@ public class PostController {
         boolean deleted = postService.deletePost(postId, userOptional.get());
         return deleted ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
+    @DeleteMapping("/comments/delete/all/{postId}")
+    @Transactional
+    public ResponseEntity<Void> deleteAllComments(@PathVariable String postId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Optional<User> userOptional = userRepository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Optional<Post> postOptional = postRepository.findById(postId);
+        if (postOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        Post post = postOptional.get();
+        if (!post.getUser().getUsername().equals(username)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        commentRepository.deleteAllByPostId(postId);
+        post.setCommentCount(0);
+        postRepository.save(post);
+
+        return ResponseEntity.ok().build();
+    }
+
 }

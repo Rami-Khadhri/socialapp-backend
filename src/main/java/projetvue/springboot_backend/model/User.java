@@ -34,8 +34,8 @@ public class User implements UserDetails {
     @Getter
     @Setter
     private String verificationToken;
-@Getter
-@Setter
+    @Getter
+    @Setter
     private Binary photo;
     @Setter
     @Getter
@@ -87,8 +87,44 @@ public class User implements UserDetails {
         return authoritiesList;
     }
 
+    public String getId() {
+        return id;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public boolean isVerified() {
+        return verified;
+    }
+
+    public void setVerified(boolean verified) {
+        this.verified = verified;
+    }
+
+    public String getVerificationToken() {
+        return verificationToken;
+    }
+
+    public void setVerificationToken(String verificationToken) {
+        this.verificationToken = verificationToken;
+    }
+
     public Binary getPhoto() {
         return photo;
+    }
+
+    public boolean isGoogleUser() {
+        return isGoogleUser;
+    }
+
+    public void setGoogleUser(boolean googleUser) {
+        isGoogleUser = googleUser;
     }
 
     public String getPhotoUrl() {
