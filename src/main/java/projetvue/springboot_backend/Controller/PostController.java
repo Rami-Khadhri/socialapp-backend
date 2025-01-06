@@ -1,7 +1,5 @@
 package projetvue.springboot_backend.Controller;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -10,16 +8,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import projetvue.springboot_backend.Repository.CommentRepository;
-import projetvue.springboot_backend.Service.NotificationService;
 import projetvue.springboot_backend.dto.CommentDTO;
-import projetvue.springboot_backend.dto.PostDTO;
 import projetvue.springboot_backend.model.Comment;
-import projetvue.springboot_backend.model.Poll;
 import projetvue.springboot_backend.model.Post;
 import projetvue.springboot_backend.model.User;
 import projetvue.springboot_backend.Repository.PostRepository;
@@ -27,11 +21,11 @@ import projetvue.springboot_backend.Repository.UserRepository;
 import projetvue.springboot_backend.Service.FileStorageService;
 import projetvue.springboot_backend.Service.PostService;
 
-import java.io.IOException;
-import java.security.Principal;
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -50,98 +44,52 @@ public class PostController {
     @Autowired
     private PostService postService;
 
-    @Autowired
-    private FileStorageService fileStorageService;
-
-    @Autowired
-    private NotificationService notificationService;
     @PostMapping("/create")
-    public ResponseEntity<?> createPost(
+    public ResponseEntity<Post> createPost(
             @RequestParam("content") String content,
-            @RequestParam(value = "images", required = false) List<MultipartFile> imageFiles,
-            @RequestParam(value = "videos", required = false) List<MultipartFile> videoFiles,
-            @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "pollData", required = false) String pollJson // Poll as JSON string
+            @RequestParam(value = "image", required = false) MultipartFile imageFile
     ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        Optional<User> userOptional = userRepository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        User user = userOptional.get();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(postService.createPost(user, content, imageFile));
+    }
+    @GetMapping("/all")
+    public ResponseEntity<List<Post>> getAllPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         try {
-            // Parse the Poll object from JSON
-            Poll poll = null;
-            if (pollJson != null && !pollJson.isEmpty()) {
-                ObjectMapper objectMapper = new ObjectMapper();
-                poll = objectMapper.readValue(pollJson, Poll.class);
-            }
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            List<Post> posts = postRepository.findAll(pageable).getContent();
 
-            // Get authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String username = auth.getName();
+            // Return posts without heavy or unnecessary fields
+            posts.forEach(post -> {
+                post.setLikedBy(null); // Exclude `likedBy` if not needed
+            });
 
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-            // Process files
-            List<String> imageUrls = processFiles(imageFiles);
-            List<String> videoUrls = processFiles(videoFiles);
-
-            // Create the post
-            Post createdPost = postService.createPost(user, content, imageUrls, videoUrls, category, poll);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdPost);
+            return ResponseEntity.ok(posts);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Collections.singletonMap("error", e.getMessage()));
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 
 
-    @PutMapping("/edit/{postId}")
-    public ResponseEntity<?> editPost(
-            @PathVariable String postId,
-            @RequestParam("content") String content,
-            @RequestParam(value = "images", required = false) List<MultipartFile> imageFiles,
-            @RequestParam(value = "videos", required = false) List<MultipartFile> videoFiles,
-            @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "pollData", required = false) String pollJson // Poll as JSON string
-    ) {
-        try {
-            // Parse the Poll object from JSON
-            Poll poll = null;
-            if (pollJson != null && !pollJson.isEmpty()) {
-                ObjectMapper objectMapper = new ObjectMapper();
-                poll = objectMapper.readValue(pollJson, Poll.class);
-            }
-
-            // Get authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String username = auth.getName();
-
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("Unauthorized"));
-
-            // Process files
-            List<String> imageUrls = processFiles(imageFiles);
-            List<String> videoUrls = processFiles(videoFiles);
-
-            // Edit the post
-            Post editedPost = postService.editPost(postId, user, content, imageUrls, videoUrls, category, poll);
-
-            // Notify users who liked the post
-            List<String> likerIds = postService.getLikerIds(postId); // Get list of user IDs who liked the post
-            notificationService.createNotifications(likerIds, postId, username); // Notify these users
-
-            return ResponseEntity.ok(editedPost);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Collections.singletonMap("error", e.getMessage()));
-        }
-    }
-
-
-
-
-
-
-    // --- Remove Poll from a Post ---
-    @DeleteMapping("/{postId}/poll")
-    public ResponseEntity<Post> removePoll(@PathVariable String postId) {
+    @PostMapping("/{postId}/like")
+    public ResponseEntity<Map<String, Object>> likePost(@PathVariable String postId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
@@ -150,48 +98,39 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        User user = userOptional.get();
-
         try {
-            Post post = postService.removePollFromPost(postId, user);
-            return ResponseEntity.ok(post);
+            Post post = postRepository.findById(postId)
+                    .orElseThrow(() -> new RuntimeException("Post not found"));
+            User currentUser = userOptional.get();
+
+            boolean liked;
+            if (post.getLikedBy().contains(currentUser)) {
+                // Unlike the post
+                post.getLikedBy().remove(currentUser);
+                liked = false;
+            } else {
+                // Like the post only if not already liked
+                post.getLikedBy().add(currentUser);
+                liked = true;
+            }
+
+            post.setLikeCount(post.getLikedBy().size());
+            postRepository.save(post);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("liked", liked);
+            response.put("likeCount", post.getLikeCount());
+
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
 
-    // --- Helper Method to Process Files ---
-    private List<String> processFiles(List<MultipartFile> files) throws IOException {
-        List<String> fileUrls = new ArrayList<>();
-        if (files != null) {
-            for (MultipartFile file : files) {
-                String fileUrl = fileStorageService.storeFile(file);
-                fileUrls.add(fileUrl);
-            }
-        }
-        return fileUrls;
-    }
-
-    @GetMapping("/all")
-    public ResponseEntity<List<Post>> getAllPosts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        List<Post> posts = postRepository.findAll(pageable).getContent();
-
-        posts.forEach(post -> {
-            post.setComments(null); // Exclude comments for better performance
-        });
-
-        return ResponseEntity.ok(posts);
-    }
-
-
-
     @PostMapping("/{postId}/comment")
     public ResponseEntity<Comment> addComment(
             @PathVariable String postId,
-            @RequestBody CommentDTO commentDTO
+            @RequestBody CommentDTO commentDTO // Change to @RequestBody
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
@@ -210,41 +149,36 @@ public class PostController {
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<PostDTO> getPostWithComments(@PathVariable String postId) {
+    public ResponseEntity<Map<String, Object>> getPostWithComments(@PathVariable String postId) {
         Optional<Post> postOptional = postRepository.findById(postId);
         if (postOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
         Post post = postOptional.get();
-        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
 
-        PostDTO postDTO = new PostDTO();
-        postDTO.setId(post.getId());
-        postDTO.setContent(post.getContent());
-        postDTO.setImageUrls(post.getImageUrls());
-        postDTO.setVideoUrls(post.getVideoUrls());
-        postDTO.setLikeCount(post.getLikeCount());
-        postDTO.setCommentCount(post.getCommentCount());
-        postDTO.setShareCount(post.getShareCount());
-        postDTO.setCreatedAt(post.getCreatedAt());
-        postDTO.setComments(comments);
+        // Fetch comments efficiently based on postId
+        List<Comment> comments = commentRepository.findByPostId(postId);
 
-        return ResponseEntity.ok(postDTO);
+        // Construct a response with full post and comments
+        Map<String, Object> response = new HashMap<>();
+        response.put("post", post);
+        response.put("comments", comments);
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<List<Comment>> getCommentsForPost(
-            @PathVariable String postId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        List<Comment> comments = commentRepository.findByPostId(postId);
+    public ResponseEntity<List<Comment>> getCommentsForPost(@PathVariable String postId) {
+        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
         return ResponseEntity.ok(comments);
     }
-
-    @DeleteMapping("/comments/delete/{commentId}")
-    public ResponseEntity<Void> deleteComment(@PathVariable String commentId) {
+    @PutMapping("/edit/{postId}")
+    public ResponseEntity<Post> editPost(
+            @PathVariable String postId,
+            @RequestParam("content") String content,
+            @RequestParam(value = "image", required = false) MultipartFile imageFile
+    ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
@@ -253,24 +187,15 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        Optional<Comment> commentOptional = commentRepository.findById(commentId);
-        if (commentOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        Comment comment = commentOptional.get();
-        if (!comment.getUser().getUsername().equals(username)) {
+        try {
+            Post editedPost = postService.editPost(postId, userOptional.get(), content, imageFile);
+            return ResponseEntity.ok(editedPost);
+        } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-
-        // Update post's comment count
-        Post post = postRepository.findPostById(comment.getPostId());
-        post.setCommentCount(post.getCommentCount() - 1);
-        postRepository.save(post);
-
-        commentRepository.delete(comment);
-        return ResponseEntity.ok().build();
     }
+
+
 
     @DeleteMapping("/delete/{postId}")
     public ResponseEntity<Void> deletePost(@PathVariable String postId) {
@@ -282,190 +207,7 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        Optional<Post> postOptional = postRepository.findById(postId);
-        if (postOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        Post post = postOptional.get();
-
-        if (!post.getUser().getUsername().equals(username)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        commentRepository.deleteAllByPostId(postId);
-        postRepository.delete(post);
-
-        return ResponseEntity.ok().build();
+        boolean deleted = postService.deletePost(postId, userOptional.get());
+        return deleted ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
-
-    @DeleteMapping("/comments/delete/all/{postId}")
-    @Transactional
-    public ResponseEntity<Void> deleteAllComments(@PathVariable String postId) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String username = auth.getName();
-
-        Optional<User> userOptional = userRepository.findByUsername(username);
-        if (userOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Optional<Post> postOptional = postRepository.findById(postId);
-        if (postOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        Post post = postOptional.get();
-        if (!post.getUser().getUsername().equals(username)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        commentRepository.deleteAllByPostId(postId);
-        post.setCommentCount(0);
-        postRepository.save(post);
-
-        return ResponseEntity.ok().build();
-    }
-
-    @PutMapping("/comments/edit/{commentId}")
-    public ResponseEntity<Comment> editComment(
-            @PathVariable String commentId,
-            @RequestBody CommentDTO commentDTO
-    ) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String username = auth.getName();
-
-        Optional<User> userOptional = userRepository.findByUsername(username);
-        if (userOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Optional<Comment> commentOptional = commentRepository.findById(commentId);
-        if (commentOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        Comment comment = commentOptional.get();
-        if (!comment.getUser().getUsername().equals(username)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        comment.setContent(commentDTO.getContent());
-        comment.setEditedAt(LocalDateTime.now());
-        commentRepository.save(comment);
-
-        return ResponseEntity.ok(comment);
-    }
-
-    @PutMapping("/{postId}/vote")
-    public ResponseEntity<?> voteOnPoll(@PathVariable String postId, @RequestParam("option") String option) {
-        try {
-            // Get authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String username = auth.getName();
-
-            // Get user object
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("Unauthorized"));
-
-            // Get the post and poll
-            Post post = postRepository.findById(postId)
-                    .orElseThrow(() -> new RuntimeException("Post not found"));
-
-            Poll poll = post.getPoll();
-            if (poll == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("This post does not have a poll.");
-            }
-
-            // Check if the user has already voted
-            if (poll.getVoters().containsKey(user.getId())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("You have already voted.");
-            }
-
-            // Update the poll with the new vote
-            poll.getVoters().put(user.getId(), option);
-            poll.getVotes().put(option, poll.getVotes().getOrDefault(option, 0) + 1);
-
-            // Save the updated poll and post
-            post.setPoll(poll);
-            postRepository.save(post);
-
-            return ResponseEntity.ok(poll);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.singletonMap("error", e.getMessage()));
-        }
-    }
-    @GetMapping("/{postId}/poll/{option}/voters")
-    public ResponseEntity<List<User>> getVotersForPollOption(@PathVariable String postId, @PathVariable String option) {
-        try {
-            Post post = postRepository.findById(postId)
-                    .orElseThrow(() -> new RuntimeException("Post not found"));
-
-            Poll poll = post.getPoll();
-            if (poll == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.emptyList());
-            }
-
-            List<User> voters = poll.getVoters().entrySet().stream()
-                    .filter(entry -> option.equals(entry.getValue()))
-                    .map(entry -> userRepository.findById(entry.getKey()).orElse(null))
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
-
-            return ResponseEntity.ok(voters);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    @PostMapping("/{postId}/like")
-    public ResponseEntity<?> toggleLikePost(@PathVariable String postId, Principal principal) {
-        Optional<Post> optionalPost = postRepository.findById(postId);
-        if (!optionalPost.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Post not found");
-        }
-
-        Post post = optionalPost.get();
-        String currentUsername = principal.getName(); // Fetch the logged-in user
-        User currentUser = userRepository.findByUsername(currentUsername).orElse(null);
-
-        if (currentUser == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authorized");
-        }
-
-        boolean alreadyLiked = post.getLikedBy().stream()
-                .anyMatch(user -> user.getId().equals(currentUser.getId()));
-
-        if (alreadyLiked) {
-            // Dislike logic: Remove user and decrement like count
-            post.getLikedBy().removeIf(user -> user.getId().equals(currentUser.getId()));
-            post.setLikeCount(post.getLikeCount() - 1);
-        } else {
-            // Like logic: Add user and increment like count
-            post.getLikedBy().add(currentUser);
-            post.setLikeCount(post.getLikeCount() + 1);
-        }
-
-        // Save the post and return updated data
-        postRepository.save(post);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("liked", !alreadyLiked); // true if liked, false if disliked
-        response.put("likeCount", post.getLikeCount());
-
-        return ResponseEntity.ok(response);
-    }
-
-
-    @GetMapping("/{postId}/likes")
-    public ResponseEntity<List<User>> getPostLikes(@PathVariable String postId) {
-        // Replace with your service logic to fetch the users who liked the post
-        List<User> likedUsers = postService.getLikedUsers(postId);
-        return ResponseEntity.ok(likedUsers);
-    }
-    @GetMapping("/{postId}/liked-by")
-    public ResponseEntity<?> getLikedByUsers(@PathVariable String postId) {
-        List<Map<String, Object>> likedByUsers = postService.getLikedByUsers(postId);
-        return ResponseEntity.ok(likedByUsers);
-    }
-
 }
