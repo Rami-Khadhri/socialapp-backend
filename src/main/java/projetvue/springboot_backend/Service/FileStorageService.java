@@ -1,14 +1,20 @@
 package projetvue.springboot_backend.Service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -17,27 +23,54 @@ public class FileStorageService {
     @Value("${file.upload-dir}")
     private String uploadDir;
 
-    public String storeFile(MultipartFile file) {
+    public String storeFile(MultipartFile file) throws IOException {
+        // Validate file type (only image or video allowed)
+        String contentType = file.getContentType();
+        if (contentType == null || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+            throw new IllegalArgumentException("Unsupported file type");
+        }
+
+        // Generate unique file name
+        String uniqueFileName = UUID.randomUUID().toString() + "_" + StringUtils.cleanPath(file.getOriginalFilename());
+        Path targetLocation = Paths.get(uploadDir).resolve(uniqueFileName);
+
+        // Create the parent directories if they don't exist
+        Files.createDirectories(targetLocation.getParent());
+
+        // Write the file to the target location
         try {
-            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
+            Files.write(targetLocation, file.getBytes());
+        } catch (IOException e) {
+            throw new IOException("Could not store file " + uniqueFileName, e);
+        }
 
-            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-            Path targetLocation = uploadPath.resolve(fileName);
+        // Return the URL or relative path for accessing the file
+        return "" + uniqueFileName;
+    }
+    @DeleteMapping("/remove-file")
+    public ResponseEntity<Void> removeFile(@RequestBody Map<String, String> request) {
+        String fileUrl = request.get("fileUrl");
 
-            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-            return "" + fileName;
-        } catch (IOException ex) {
-            throw new RuntimeException("Could not store file", ex);
+        try {
+            // Call the deleteFile method to remove the file
+            deleteFile(fileUrl);
+            return ResponseEntity.ok().build();
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-    public boolean deleteFile(String fileName) {
-        try {
-            Path filePath = Paths.get(uploadDir).toAbsolutePath().normalize().resolve(fileName);
-            return Files.deleteIfExists(filePath); // Returns true if the file was deleted, false if it didn't exist
-        } catch (IOException ex) {
-            throw new RuntimeException("Could not delete file: " + fileName, ex);
+
+
+    public void deleteFile(String fileUrl) throws IOException {
+        // Extract file name from the URL and create the full file path
+        String fileName = fileUrl.replace("/uploads/", "");
+        Path filePath = Paths.get(uploadDir, fileName);
+
+        // Delete the file if it exists
+        if (Files.exists(filePath)) {
+            Files.delete(filePath);
+        } else {
+            throw new IOException("File not found: " + fileName);
         }
     }
 }

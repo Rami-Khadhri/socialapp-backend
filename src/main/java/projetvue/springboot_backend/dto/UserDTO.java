@@ -19,4 +19,5 @@ public class UserDTO {
     @Getter
     @Setter
     private Binary photo;
+
 }
