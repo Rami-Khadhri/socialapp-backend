@@ -13,6 +13,8 @@ public interface UserRepository extends MongoRepository<User, String> {
     User getUserByUsername(String username);
         List<User> findByUsernameContainingIgnoreCase(String username);
 
+    List<User> findAllById(Iterable<String> ids);
+
     // You can add more query methods if needed
     Optional<User> findByEmail(String email);
     Optional<User> findByVerificationToken(String verificationToken);// Example for finding by email

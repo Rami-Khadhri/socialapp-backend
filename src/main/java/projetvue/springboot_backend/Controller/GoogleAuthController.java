@@ -108,10 +108,15 @@ public class GoogleAuthController {
     private AuthResponse createAuthResponse(User user, String token) {
         return AuthResponse.builder()
                 .token(token)
+                .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole())
                 .photoUrl(user.getPhotoUrl())
+                .friendIds(user.getFriendIds())
+                .sentFriendRequests(user.getSentFriendRequests())
+                .receivedFriendRequests(user.getReceivedFriendRequests())
+                .coverPhoto(user.getCoverPhoto())
                 .build();
     }
 

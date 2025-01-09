@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import projetvue.springboot_backend.Repository.UserRepository;
 import projetvue.springboot_backend.Service.UserService;
+import projetvue.springboot_backend.dto.UserDTO;
 import projetvue.springboot_backend.model.User;
 
 import java.io.IOException;
@@ -25,6 +26,7 @@ public class UserController {
     private final UserService userService;
 
     @Autowired
+
     public UserController(UserRepository userRepository, UserService userService) {
         this.userRepository = userRepository;
         this.userService = userService;
@@ -67,6 +69,10 @@ public class UserController {
                     existingUser.setRole(updatedUser.getRole());
                     existingUser.setEnabled(updatedUser.isEnabled());
                     existingUser.setVerified(updatedUser.isVerified());
+                    existingUser.setSentFriendRequests(updatedUser.getSentFriendRequests());
+                    existingUser.setFriendIds(updatedUser.getFriendIds());
+                    existingUser.setReceivedFriendRequests(updatedUser.getReceivedFriendRequests());
+                    existingUser.setCoverPhoto(updatedUser.getCoverPhoto());
 
                     User savedUser = userRepository.save(existingUser);
                     return ResponseEntity.ok(savedUser);
@@ -190,6 +196,15 @@ public class UserController {
                     .body("Failed to retrieve photo: " + e.getMessage());
         }
     }
+    @PostMapping("/friendDetails")
+    public ResponseEntity<?> getFriendDetails(@RequestBody List<String> friendIds) {
+        try {
+            List<User> friends = userService.getUsersByIds(friendIds);
+            return ResponseEntity.ok(friends);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error fetching friend details: " + e.getMessage());
+        }
+    }
     @DeleteMapping("/delete/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable String id) {
@@ -197,6 +212,31 @@ public class UserController {
             userRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         }
+
         return ResponseEntity.notFound().build();
     }
+
+    @GetMapping("/userprofile/{id}")
+    public ResponseEntity<?> getUserProfile(@PathVariable String id) {
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            // Filter sensitive information
+            UserDTO userDTO = new UserDTO(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getRole(),
+                    user.getPhotoUrl(),
+                    user.getCoverPhoto(),
+                    user.getFriendIds(),
+                    user.getSentFriendRequests(),
+                    user.getReceivedFriendRequests()
+
+            );
+            return ResponseEntity.ok(userDTO);
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+    }
+
 }

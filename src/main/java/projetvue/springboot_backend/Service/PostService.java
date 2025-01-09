@@ -289,5 +289,24 @@ public class PostService {
                 .collect(Collectors.toList());
     }
 
+    public List<Map<String, Object>> getUserPostsWithDetails(String userId) {
+        // Find the user by ID (you can fetch this from your user repository or use the username)
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Get the posts for the user
+        List<Post> posts = postRepository.findByUser(user);
+
+        // Map the posts into a list of details for charting
+        return posts.stream()
+                .map(post -> {
+                    Map<String, Object> postDetails = Map.of(
+                            "content", post.getContent(),
+                            "likeCount", post.getLikeCount(),
+                            "commentCount", post.getCommentCount(),
+                            "shareCount", post.getShareCount()
+                    );
+                    return postDetails;
+                })
+                .collect(Collectors.toList());
+    }
 }

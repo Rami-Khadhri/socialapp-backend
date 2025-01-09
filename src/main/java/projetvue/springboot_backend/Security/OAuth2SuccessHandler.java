@@ -14,6 +14,7 @@ import projetvue.springboot_backend.Security.JwtService;
 import projetvue.springboot_backend.model.User;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Optional;
 
 @Component
@@ -39,6 +40,10 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             newUser.setEnabled(true);
             newUser.setGoogleUser(true);
             newUser.setPhotoUrl(token.getPrincipal().getAttribute("picture"));
+            newUser.setFriendIds(new ArrayList<>());
+            newUser.setCoverPhoto("lien");
+            newUser.setSentFriendRequests(new ArrayList<>());
+            newUser.setReceivedFriendRequests(new ArrayList<>());
             userRepository.save(newUser);  // Save new user
             user = Optional.of(newUser);  // Re-fetch the user after saving
         }

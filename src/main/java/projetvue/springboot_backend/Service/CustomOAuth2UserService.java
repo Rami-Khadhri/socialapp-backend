@@ -13,6 +13,7 @@ import projetvue.springboot_backend.Repository.UserRepository;
 import projetvue.springboot_backend.Security.JwtService;
 import projetvue.springboot_backend.model.User;
 
+import java.util.ArrayList;
 import java.util.Collections;
 @Service
 @RequiredArgsConstructor
@@ -40,6 +41,10 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
                     newUser.setEnabled(true);
                     newUser.setGoogleUser(true);
                     newUser.setPhotoUrl(picture);
+                    newUser.setFriendIds(new ArrayList<>());
+                    newUser.setCoverPhoto("lien");
+                    newUser.setSentFriendRequests(new ArrayList<>());
+                    newUser.setReceivedFriendRequests(new ArrayList<>());
                     return userRepository.save(newUser);
                 });
 

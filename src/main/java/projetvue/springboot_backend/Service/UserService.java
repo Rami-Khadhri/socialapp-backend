@@ -109,12 +109,17 @@ public class UserService {
                     newUser.setGoogleUser(true);
                     newUser.setRole("ROLE_USER");
                     newUser.setAuthorities(Collections.singletonList("ROLE_USER"));
+                    newUser.setReceivedFriendRequests(null);
+                    newUser.setSentFriendRequests(null);
+                    newUser.setFriendIds(null);
                     return userRepository.save(newUser);
                 });
     }
 
 
-
+    public List<User> getUsersByIds(List<String> userIds) {
+        return userRepository.findAllById(userIds);
+    }
     // Delete a user by ID
     public void deleteUser(String id) {
         userRepository.deleteById(id);

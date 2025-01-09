@@ -1,6 +1,10 @@
 package projetvue.springboot_backend.Controller;
 
 import io.jsonwebtoken.JwtException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.Binary;
@@ -51,9 +55,6 @@ public class AuthController {
             throw new RuntimeException("Failed to initialize default photo", e);
         }
     }
-
-
-
 
 
     @PostMapping("/register")
@@ -119,10 +120,15 @@ public class AuthController {
             // Build the response with both photo types
             AuthResponse response = AuthResponse.builder()
                     .token(token)
+                    .id(user.getId())
                     .username(user.getUsername())
                     .email(user.getEmail())
                     .role(user.getRole())
                     .photo(user.getPhoto())
+                    .friendIds(user.getFriendIds())
+                    .sentFriendRequests(user.getSentFriendRequests())
+                    .receivedFriendRequests(user.getReceivedFriendRequests())
+                    .coverPhoto(user.getCoverPhoto())
                     .build();
 
             return ResponseEntity.ok(response);
@@ -166,6 +172,7 @@ public class AuthController {
             // Build the response with the user's details
             AuthResponse response = AuthResponse.builder()
                     .token(token)
+                    .id(user.getId())
                     .username(user.getUsername())
                     .email(user.getEmail())
                     .role(user.getRole())
@@ -174,6 +181,10 @@ public class AuthController {
                     .photo(user.getPhoto())
                     .isGoogleUser(user.isGoogleUser())
                     .photoUrl(user.getPhotoUrl())
+                    .friendIds(user.getFriendIds())
+                    .sentFriendRequests(user.getSentFriendRequests())
+                    .receivedFriendRequests(user.getReceivedFriendRequests())
+                    .coverPhoto(user.getCoverPhoto())
                     .build();
 
             return ResponseEntity.ok(response);
@@ -201,18 +212,18 @@ public class AuthController {
 
             // HTML confirmation message with auto-redirect
             String htmlResponse = """
-            <html>
-                <body style="text-align: center; font-family: Arial, sans-serif; margin-top: 50px;">
-                    <h1>Account Verified Successfully!</h1>
-                    <p>You will be redirected to your profile page shortly...</p>
-                    <script>
-                        setTimeout(() => {
-                            window.location.href = "http://localhost:8080/profile";
-                        }, 3000);
-                    </script>
-                </body>
-            </html>
-        """;
+                        <html>
+                            <body style="text-align: center; font-family: Arial, sans-serif; margin-top: 50px;">
+                                <h1>Account Verified Successfully!</h1>
+                                <p>You will be redirected to your profile page shortly...</p>
+                                <script>
+                                    setTimeout(() => {
+                                        window.location.href = "http://localhost:8080/profile";
+                                    }, 3000);
+                                </script>
+                            </body>
+                        </html>
+                    """;
 
             return ResponseEntity.ok()
                     .header("Content-Type", "text/html")
@@ -230,7 +241,7 @@ public class AuthController {
             String email = passwordResetRequest.getEmail();
 
             // Ensure the email is provided
-            if (email == null || email.isEmpty() ) {
+            if (email == null || email.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ErrorResponse("Email is required"));
             }
@@ -273,8 +284,51 @@ public class AuthController {
                     .body(new ErrorResponse("An unexpected error occurred"));
         }
     }
+
     @PostMapping("/logout")
-    public ResponseEntity<?> logout() {
-        return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+    public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+        try {
+            // Get the Authorization header
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String jwt = authHeader.substring(7);
+                // You could add the token to a blacklist or invalidation cache
+                // tokenBlacklistService.addToBlacklist(jwt);
+            }
+
+            // Clear any session attributes if you're using sessions
+            HttpSession session = request.getSession(false);
+            if (session != null) {
+                session.invalidate();
+            }
+
+            // Clear security context
+            SecurityContextHolder.clearContext();
+
+            // You might want to clear cookies if you're using them
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    cookie.setValue("");
+                    cookie.setPath("/");
+                    cookie.setMaxAge(0);
+                    response.addCookie(cookie);
+                }
+            }
+
+            return ResponseEntity.ok()
+                    .body(Map.of(
+                            "message", "Logged out successfully",
+                            "timestamp", new Date(),
+                            "status", "success"
+                    ));
+        } catch (Exception e) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "message", "Error during logout",
+                            "error", e.getMessage()
+                    ));
+        }
     }
 }
